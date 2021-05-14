@@ -33,11 +33,11 @@ double getTimeSecs(const timeStamp& start, const timeStamp& end);
 #endif
 
 // Dimensiones de la imagen a procesar
-int WIDTH;
-int HEIGHT;
+__device__ int WIDTH;
+__device__ int HEIGHT;
 
 // valor del umbral 
-int Threshold;
+__device__ int Threshold;
 
 
 // Funciones auxiliares
@@ -62,15 +62,39 @@ unsigned char *gpu_output;
 // CUDA kernel background
 __global__ void Background(unsigned char *d_output, unsigned char *d_inputb, unsigned char *d_inputf, int width)
 {
-
+	int temp, mean = 0, clr = 1;
+	int yWindow, xWindow, y2, x2;
 	/*
 	* Calculamos la fila y columna global para este hilo
 	*/
 	// TO DO
+	int x = (threadIdx.x + blockDim.x * blockIdx.x) + 1;
+	//int y = blockIdx.y * blockDim.y + threadIdx.y + 1;
 
 
 	// Realizar la substracción para el pixel correspondiente a este hilo 
 	// TO DO
+	for(int y = 1; y < width; y++)
+	{
+
+		for (yWindow = -1; yWindow < 2; yWindow++) {
+			y2 = y + yWindow;
+			for (xWindow = -1; xWindow < 2; xWindow++) {
+				x2 = x + xWindow;
+				mean += d_inputf[y2 * width + x2];
+			}
+		}
+
+		mean = mean / 9;
+		temp = abs((mean - d_inputb[y * width + x]));
+
+		if (temp > Threshold)
+			clr = 0;
+		if (clr == 0)
+			d_output[y * width + x] = 255;
+		else
+			d_output[y * width + x] = 0;
+	}
 
 
 }
@@ -162,8 +186,10 @@ int main(int argc, char *argv[])
 	// Ejecutar background en la GPU
 	/* Ejecución kernel  */
 	// TO DO - Calcular tamaño de bloque y grid para la correcta ejecucion del kernel
+	dim3 dimBlock(256);
+	dim3 dimGrid(ceil(float(WIDTH)/256.));
 	// TO DO - Ejecutar el kernel
-
+	Background <<<dimGrid, dimBlock>>> (gpu_output, input_imageb, input_imagef, WIDTH);
 
 	// Copiamos de la memoria de la GPU 
 	cudaMemcpy(gpu_output, d_output, memSize, cudaMemcpyDeviceToHost);
