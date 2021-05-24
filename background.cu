@@ -33,11 +33,11 @@ double getTimeSecs(const timeStamp& start, const timeStamp& end);
 #endif
 
 // Dimensiones de la imagen a procesar
-__device__ int WIDTH;
-__device__ int HEIGHT;
+int WIDTH;
+int HEIGHT;
 
 // valor del umbral 
-__device__ int Threshold;
+int Threshold;
 
 
 // Funciones auxiliares
@@ -60,7 +60,7 @@ unsigned char *gpu_output;
 
 
 // CUDA kernel background
-__global__ void Background(unsigned char *d_output, unsigned char *d_inputb, unsigned char *d_inputf, int width)
+__global__ void Background(unsigned char *d_output, unsigned char *d_inputb, unsigned char *d_inputf, int width, int thresh)
 {
 	int temp, mean = 0, clr = 1;
 	int yWindow, xWindow, y2, x2;
@@ -68,14 +68,11 @@ __global__ void Background(unsigned char *d_output, unsigned char *d_inputb, uns
 	* Calculamos la fila y columna global para este hilo
 	*/
 	// TO DO
-	int x = (threadIdx.x + blockDim.x * blockIdx.x) + 1;
-	//int y = blockIdx.y * blockDim.y + threadIdx.y + 1;
-
-
+	int x = (threadIdx.x + blockDim.x * blockIdx.x) * 1;
+	int y = (threadIdx.y + blockDim.y * blockIdx.y) * 1;
+	
 	// Realizar la substracción para el pixel correspondiente a este hilo 
 	// TO DO
-	for(int y = 1; y < width; y++)
-	{
 
 		for (yWindow = -1; yWindow < 2; yWindow++) {
 			y2 = y + yWindow;
@@ -88,15 +85,13 @@ __global__ void Background(unsigned char *d_output, unsigned char *d_inputb, uns
 		mean = mean / 9;
 		temp = abs((mean - d_inputb[y * width + x]));
 
-		if (temp > Threshold)
+		if (temp > thresh)
 			clr = 0;
 		if (clr == 0)
 			d_output[y * width + x] = 255;
 		else
 			d_output[y * width + x] = 0;
-	}
-
-
+	
 }
 
 /***********************************************************************************/
@@ -186,10 +181,12 @@ int main(int argc, char *argv[])
 	// Ejecutar background en la GPU
 	/* Ejecución kernel  */
 	// TO DO - Calcular tamaño de bloque y grid para la correcta ejecucion del kernel
-	dim3 dimBlock(256);
-	dim3 dimGrid(ceil(float(WIDTH)/256.));
+	dim3 dimBlock(BLOCK_W, BLOCK_H, 1);
+	dim3 dimGrid(GRID_W, GRID_H, 1);
+
 	// TO DO - Ejecutar el kernel
-	Background <<<dimGrid, dimBlock>>> (gpu_output, input_imageb, input_imagef, WIDTH);
+	Background<<<dimGrid, dimBlock>>> (d_output, d_inputb, d_inputf, WIDTH, Threshold);
+	cudaThreadSynchronize();
 
 	// Copiamos de la memoria de la GPU 
 	cudaMemcpy(gpu_output, d_output, memSize, cudaMemcpyDeviceToHost);
@@ -232,15 +229,13 @@ int main(int argc, char *argv[])
 
 		}
 	}
-
-
 	cpu_end_time = get_current_time();
 
 	/* Comprobamos que los resultados de la GPU coinciden con los calculados en la CPU */
 
 	errors = 0;
-	for (y = 1; y < HEIGHT - 1; y++) {
-		for (x = 1; x < WIDTH - 1; x++) {
+	for (y = 1; y < HEIGHT-1; y++) {
+		for (x = 1; x < WIDTH-1; x++) {
 			if (output_image[y *WIDTH + x] != gpu_output[y *WIDTH + x]) {
 				errors++;
 				//printf("Error en %d,%d (CPU=%i, GPU=%i)\n", x, y, \
