@@ -60,7 +60,7 @@ unsigned char *gpu_output;
 
 
 // CUDA kernel background
-__global__ void Background(unsigned char *d_output, unsigned char *d_inputb, unsigned char *d_inputf, int width, int thresh)
+__global__ void Background(unsigned char *d_output, unsigned char *d_inputb, unsigned char *d_inputf, int width, int height, int thresh)
 {
 	int temp, mean = 0, clr = 1;
 	int yWindow, xWindow, y2, x2;
@@ -71,9 +71,11 @@ __global__ void Background(unsigned char *d_output, unsigned char *d_inputb, uns
 	int x = (threadIdx.x + blockDim.x * blockIdx.x) * 1;
 	int y = (threadIdx.y + blockDim.y * blockIdx.y) * 1;
 	
+
 	// Realizar la substracción para el pixel correspondiente a este hilo 
 	// TO DO
 
+	if (x <= width && y <= height) {
 		for (yWindow = -1; yWindow < 2; yWindow++) {
 			y2 = y + yWindow;
 			for (xWindow = -1; xWindow < 2; xWindow++) {
@@ -91,6 +93,7 @@ __global__ void Background(unsigned char *d_output, unsigned char *d_inputb, uns
 			d_output[y * width + x] = 255;
 		else
 			d_output[y * width + x] = 0;
+	}
 	
 }
 
@@ -182,10 +185,11 @@ int main(int argc, char *argv[])
 	/* Ejecución kernel  */
 	// TO DO - Calcular tamaño de bloque y grid para la correcta ejecucion del kernel
 	dim3 dimBlock(BLOCK_W, BLOCK_H, 1);
-	dim3 dimGrid(GRID_W, GRID_H, 1);
+	dim3 dimGrid(WIDTH/GRID_W, WIDTH/GRID_H, 1);
+	
 
 	// TO DO - Ejecutar el kernel
-	Background<<<dimGrid, dimBlock>>> (d_output, d_inputb, d_inputf, WIDTH, Threshold);
+	Background<<<dimGrid, dimBlock>>> (d_output, d_inputb, d_inputf, WIDTH, HEIGHT, Threshold);
 	cudaThreadSynchronize();
 
 	// Copiamos de la memoria de la GPU 
